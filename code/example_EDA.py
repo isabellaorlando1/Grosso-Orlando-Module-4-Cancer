@@ -8,9 +8,9 @@ import seaborn as sns
 # Load the data
 ####################################################
 data = pd.read_csv(
-    '../Data/TRAINING_SET_GSE62944_subsample_log2TPM.csv', index_col=0, header=0)  # can also use larger dataset with more genes
+    r"C:\Users\isabe\Downloads\TRAINING_SET_GSE62944_subsample_log2TPM.csv", index_col=0, header=0)  # can also use larger dataset with more genes
 metadata_df = pd.read_csv(
-    '../Data/TRAINING_SET_GSE62944_metadata.csv', index_col=0, header=0)
+    r'C:\Users\isabe\OneDrive\Documents\BME2315\Grosso-Orlando-Module-4-Cancer\data\TRAINING_SET_GSE62944_metadata.csv', index_col=0, header=0)
 print(data.head())
 
 # %%
@@ -71,10 +71,10 @@ print(BRCA_gene_data.median(axis=1))
 print(metadata_df.groupby('cancer_type')["gender"].value_counts())
 
 # Explore average age at diagnosis by cancer type
-metadata_df['age_at_diagnosis'] = pd.to_numeric(
-    metadata_df['age_at_diagnosis'], errors='coerce')
+metadata_df['ajcc_pathologic_tumor_stage'] = pd.to_numeric(
+    metadata_df['ajcc_pathologic_tumor_stage'], errors='coerce')
 print(metadata_df.groupby(
-    'cancer_type')["age_at_diagnosis"].mean())
+    'cancer_type')["ajcc_pathologic_tumor_stage"].mean())
 # %%
 # Merging datasets
 ####################################################
