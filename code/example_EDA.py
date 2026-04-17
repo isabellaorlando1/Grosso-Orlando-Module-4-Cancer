@@ -11,7 +11,7 @@ data = pd.read_csv(
     r"C:\Users\isabe\Downloads\TRAINING_SET_GSE62944_subsample_log2TPM.csv", index_col=0, header=0)  # can also use larger dataset with more genes
 metadata_df = pd.read_csv(
     r'C:\Users\isabe\OneDrive\Documents\BME2315\Grosso-Orlando-Module-4-Cancer\data\TRAINING_SET_GSE62944_metadata.csv', index_col=0, header=0)
-print(data.head())
+#print(data.head())
 
 # %%
 # Explore the data
@@ -34,7 +34,7 @@ cancer_type = 'BRCA'  # Breast Invasive Carcinoma
 # From metadata, get the rows where "cancer_type" is equal to the specified cancer type
 # Then grab the index of this subset (these are the sample IDs)
 cancer_samples = metadata_df[metadata_df['cancer_type'] == cancer_type].index
-print(cancer_samples)
+#print(cancer_samples)
 # Subset the main data to include only these samples
 # When you want a subset of columns, you can pass a list of column names to the data frame in []
 BRCA_data = data[cancer_samples]
@@ -68,13 +68,13 @@ print(BRCA_gene_data.median(axis=1))
 ####################################################
 # groupby allows you to group on a specific column in the dataset,
 # and then print out summary stats or counts for other columns within those groups
-print(metadata_df.groupby('cancer_type')["gender"].value_counts())
-
+print(metadata_df.groupby('cancer_type')["ajcc_pathologic_tumor_stage"].value_counts())
+#%%
 # Explore average age at diagnosis by cancer type
-metadata_df['ajcc_pathologic_tumor_stage'] = pd.to_numeric(
-    metadata_df['ajcc_pathologic_tumor_stage'], errors='coerce')
+metadata_df['age_at_diagnosis'] = pd.to_numeric(
+    metadata_df['age_at_diagnosis'], errors='coerce')
 print(metadata_df.groupby(
-    'cancer_type')["ajcc_pathologic_tumor_stage"].mean())
+    'cancer_type')["age_at_diagnosis"].mean())
 # %%
 # Merging datasets
 ####################################################
@@ -88,15 +88,34 @@ print(BRCA_merged.head())
 # %%
 # Plotting
 ####################################################
-# Boxplot of EGFR expression in BRCA samples using SEABORN
-# Works really well with pandas dataframes, because most methods allow you to pass in a dataframe directly
-sns.boxplot(data=BRCA_merged, x="gender", y='EGFR')
-plt.title("EGFR Expression by Gender in BRCA Samples")
+# Boxplot of BRCA1 and BRCA2 expression in BRCA samples using SEABORN
+sns.boxplot(
+    data=BRCA_merged,
+    x="ajcc_tumor_pathologic_pt",
+    y='BRCA1',
+    order=["T1", "T1a", "T1b", "T1c", "T2", "T3", "T4", "T4b"]
+)
+plt.title("BRCA1 Expression by Tumor Stage in BRCA Samples")
+plt.xticks(rotation=45)
 plt.show()
 
-# Boxplot of MYC and EGFR expression in BRCA samples using PANDAS directly
-BRCA_merged[['MYC', 'EGFR']].plot.box()
-plt.title("MYC and EGFR Expression in BRCA Samples")
+
+sns.boxplot(
+    data=BRCA_merged,
+    x="ajcc_tumor_pathologic_pt",
+    y='MYC',
+    order=["T1", "T1a", "T1b", "T1c", "T2", "T3", "T4", "T4b"]
+)
+plt.title("MYC Expression by Tumor Stage in BRCA Samples")
+plt.xticks(rotation=45)
+plt.show()
+#%%
+# Boxplot of BRCA1 and BRCA2 expression in BRCA samples using PANDAS directly
+BRCA_merged[['BRCA1', 'BRCA2']].plot.box()
+plt.title("BRCA1 and BRCA2 Expression in BRCA Samples")
 plt.show()
 
 # %%
+print(BRCA_merged[["ajcc_pathologic_tumor_stage", "BRCA1", "gender"]].head(10))
+# %%
+#“How does BRCA1 expression vary across tumor stage in breast cancer?”
