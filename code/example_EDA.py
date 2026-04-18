@@ -116,6 +116,7 @@ plt.title("BRCA1 and BRCA2 Expression in BRCA Samples")
 plt.show()
 
 # %%
-print(BRCA_merged[["ajcc_pathologic_tumor_stage", "BRCA1", "gender"]].head(10))
+print(BRCA_merged[["ajcc_tumor_pathologic_pt", "BRCA1", "gender"]].head(10))
 # %%
-#“How does BRCA1 expression vary across tumor stage in breast cancer?”
+print(BRCA_merged.columns.tolist())
+# %%
