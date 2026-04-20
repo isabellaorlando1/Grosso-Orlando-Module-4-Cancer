@@ -99,12 +99,11 @@ plt.title("BRCA1 Expression by Tumor Stage in BRCA Samples")
 plt.xticks(rotation=45)
 plt.show()
 
-
+clean = BRCA_merged[BRCA_merged['tumor_status'].isin(['TUMOR FREE', 'WITH TUMOR'])]
 sns.boxplot(
-    data=BRCA_merged,
-    x="ajcc_tumor_pathologic_pt",
+    data = clean,
+    x="tumor_status",
     y='MYC',
-    order=["T1", "T1a", "T1b", "T1c", "T2", "T3", "T4", "T4b"]
 )
 plt.title("MYC Expression by Tumor Stage in BRCA Samples")
 plt.xticks(rotation=45)
