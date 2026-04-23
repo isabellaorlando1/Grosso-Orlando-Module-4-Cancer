@@ -1,3 +1,4 @@
+#Claude AI was used to assist with applying the code to our data, as well as cleaning the dataset and debugging the code.
 # %%
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 import seaborn as sns
@@ -8,22 +9,37 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.datasets import load_breast_cancer
 
 # %%
-# Load the breast cancer dataset
-cancer = load_breast_cancer(as_frame=True)
-X = cancer.data
-y = cancer.target
-print(cancer.DESCR)
+# Load the merged BRCA dataset
+data = pd.read_csv(r"C:\Users\isabe\Downloads\BRCA_merged.csv", index_col=0)
+
+#Map tumor stages to early (I-II) and late (III-IV)
+stage_map = {
+    "T1":    0, "T1a":   0, "T1b":   0, "T1c":  0,
+    "T2":   0, "T2a":  0, "T2b":  0, "T2c": 0,
+    "T3":  1, "T3a": 1, "T3b": 1, "T3c": 1,
+    "T4":   1, "T4a":   1, "T4b":    1, "T4c": 1
+}
+data["stage_binary"] = data["ajcc_tumor_pathologic_pt"].map(stage_map)
+data = data.dropna(subset=["stage_binary"]) #remove samples with missing tumor stage
+
+#Separate features (gene expression) from labels (tumor stage)
+meta_cols = ["ajcc_tumor_pathologic_pt", "cancer_type", "stage_binary"] 
+gene_cols = [col for col in data.columns if col not in meta_cols]
+
+X = data[gene_cols].values #feature matrix
+y = data["stage_binary"].values #target labels (0 = early, 1=late)
 
 # %%
-y_label = [{0: "malignant", 1: "benign"}[i] for i in y]
-sns.scatterplot(x=X["mean radius"],
-                y=X["mean smoothness"],
+#Convert binary labels to stage names
+y_label = [{0: "Early Stage (I/II)", 1: "Late Stage (III/IV)"}[i] for i in y]
+feature_1 = "CALML5"
+feature_2 = "ESR1"
+X = data[[feature_1, feature_2]].values
+sns.scatterplot(x=X[:, 0],
+                y=X[:, 1],
                 hue=y_label,
                 palette="Set1")
-# %%
-feature_1 = "mean radius"
-feature_2 = "mean smoothness"
-X = X[[feature_1, feature_2]].values
+
 
 # %%
 # Logistic regression
@@ -70,6 +86,6 @@ dt_model = DecisionTreeClassifier(max_depth=3).fit(X, y)
 print(dt_model.score(X, y))
 # %% PLOT DECISION TREE
 plot_tree(dt_model, feature_names=[
-          feature_1, feature_2], class_names=cancer.target_names, filled=True)
+          feature_1, feature_2], class_names=["Early Stage", "Late Stage"], filled=True)
 # %% TRY TO BUILD A BETTER CLASSIFIER BY PICKING BETTER FEATURES!
 # to do this, you can loop over all pairs of features in the dataset
