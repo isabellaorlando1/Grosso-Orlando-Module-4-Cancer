@@ -10,7 +10,7 @@ from sklearn.datasets import load_breast_cancer
 
 # %%
 # Load the merged BRCA dataset
-data = pd.read_csv(r"C:\Users\isabe\Downloads\BRCA_merged.csv", index_col=0)
+data = pd.read_csv(r"C:\Users\ctgrosso\Downloads\BRCA_merged.csv", index_col=0)
 
 #Map tumor stages to early (I-II) and late (III-IV)
 stage_map = {
