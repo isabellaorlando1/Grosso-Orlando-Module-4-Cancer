@@ -1,0 +1,156 @@
+
+# %%
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
+# %%
+# Load the merged BRCA dataset
+data = pd.read_csv(r"C:\Users\isabe\Downloads\BRCA_merged.csv", index_col=0)
+
+
+#Map tumor stages to early (I-II) and late (III-IV)
+stage_map = {
+    "T1":    0, "T1a":   0, "T1b":   0, "T1c":  0,
+    "T2":   0, "T2a":  0, "T2b":  0, "T2c": 0,
+    "T3":  1, "T3a": 1, "T3b": 1, "T3c": 1,
+    "T4":   1, "T4a":   1, "T4b":    1, "T4c": 1
+}
+data["stage_binary"] = data["ajcc_tumor_pathologic_pt"].map(stage_map)
+data = data.dropna(subset=["stage_binary"]) #remove samples with missing tumor stage
+
+#Separate features (gene expression) from labels (tumor stage)
+meta_cols = ["ajcc_tumor_pathologic_pt", "cancer_type", "stage_binary"] 
+gene_cols = [col for col in data.columns if col not in meta_cols]
+
+X = data[gene_cols].values #feature matrix
+y = data["stage_binary"].values #target labels (0 = early, 1=late)
+
+# %%
+#Convert binary labels to stage names
+y_label = [{0: "Early Stage (I/II)", 1: "Late Stage (III/IV)"}[i] for i in y]
+feature_1 = "BRCA1"
+feature_2 = "ESR1"
+X = data[[feature_1, feature_2]].values
+sns.scatterplot(x=X[:, 0],
+                y=X[:, 1],
+                hue=y_label,
+                palette="Set1")
+
+
+# %%
+# Logistic regression
+
+# BUILD A MODEL: 
+model = LogisticRegression(penalty=None, class_weight='balanced').fit(X, y)
+
+# PREDICT AND EVALUATE: 
+model.predict_proba(X)
+print(model.score(X, y))
+
+# %% Plotting decision boundary
+
+# Create meshgrid
+x_min, x_max = X[:, 0].min(), X[:, 0].max()
+y_min, y_max = X[:, 1].min(), X[:, 1].max()
+xx, yy = np.meshgrid(np.linspace(x_min, x_max, 300),
+                     np.linspace(y_min, y_max, 300))
+
+# Compute decision function over the grid
+Z = model.decision_function(np.c_[xx.ravel(), yy.ravel()])
+Z = Z.reshape(xx.shape)
+
+# Plot
+plt.contourf(xx, yy, Z, levels=50, cmap="RdBu", alpha=0.6)  # background
+plt.contour(xx, yy, Z, levels=[0], colors='black',
+            linewidths=2)  # decision boundary
+sns.scatterplot(x=X[:, 0],
+                y=X[:, 1],
+                hue=y_label,
+                edgecolors='k',
+                palette="Set1",
+                alpha=0.8,
+                legend=False)
+plt.legend()
+plt.xlabel(feature_1)
+plt.ylabel(feature_2)
+plt.title("Logistic Regression Decision Boundary")
+
+plt.show()
+
+
+# %%
+#Validation dataset
+# Load the data
+####################################################
+BRCA_gene_data = pd.read_csv(
+    r"C:\Users\isabe\Downloads\VALIDATION_SET_GSE62944_subsample_log2TPM.csv", index_col=0, header=0)  # can also use larger dataset with more genes
+metadata_df = pd.read_csv(
+    r'C:\Users\isabe\OneDrive\Documents\BME2315\Module-4-Cancer-Grosso-Orlando\Grosso-Orlando-Module-4-Cancer\data\VALIDATION_SET_GSE62944_metadata.csv', index_col=0, header=0)
+# %%
+# Subset the data for a specific cancer type
+####################################################
+cancer_type = 'BRCA'  # Breast Invasive Carcinoma
+
+cancer_samples = metadata_df[metadata_df['cancer_type'] == cancer_type].index
+BRCA_data = BRCA_gene_data[cancer_samples]
+
+# %%
+# Subset by index (genes)
+####################################################
+with open(r"C:\Users\isabe\OneDrive\Documents\BME2315\Module-4-Cancer-Grosso-Orlando\Grosso-Orlando-Module-4-Cancer\code\Menyhart_JPA_CancerHallmarks_core.txt","r") as f:
+    lines = f.readlines()
+
+
+sp_line = lines[8].split("\t") #line 9 - index 8
+desired_gene_list = [gene.strip() for gene in sp_line if gene.strip() not in ["SUSTAINING PROLIFERATIVE SIGNALING",""]]
+desired_gene_list = list(set(desired_gene_list))
+gene_list = [gene for gene in desired_gene_list if gene in BRCA_data.index]
+for gene in desired_gene_list:
+    if gene not in gene_list:
+        print(f"Warning: {gene} not found in the dataset.")
+BRCA_gene_data_filtered = BRCA_data.loc[gene_list]
+
+# %%
+# Merging datasets
+BRCA_metadata = metadata_df.loc[cancer_samples]
+
+# transpose so rows=samples, then merge with metadata on sample ID
+BRCA_merged_val = BRCA_gene_data_filtered.T.merge(
+    BRCA_metadata, left_index=True, right_index=True)
+
+print("Merged shape:", BRCA_merged_val.shape)
+print("Columns:", BRCA_merged_val.columns.tolist())
+# %%
+# Prepare features and target
+####################################################
+stage_map = {
+    "T1":    0, "T1a":   0, "T1b":   0, "T1c":  0,
+    "T2":   0, "T2a":  0, "T2b":  0, "T2c": 0,
+    "T3":  1, "T3a": 1, "T3b": 1, "T3c": 1,
+    "T4":   1, "T4a":   1, "T4b":    1, "T4c": 1
+}
+
+BRCA_merged_val["stage_binary"] = BRCA_merged_val["ajcc_tumor_pathologic_pt"].map(stage_map)
+BRCA_merged_val = BRCA_merged_val.dropna(subset=["stage_binary"])
+
+X_val = BRCA_merged_val[[feature_1, feature_2]].values
+y_val = BRCA_merged_val["stage_binary"].values
+
+# Predict and evaluate
+####################################################
+y_pred = model.predict(X_val)
+
+print("Validation accuracy:", model.score(X_val, y_val))
+print(classification_report(y_val, y_pred, target_names=["Early Stage", "Late Stage"]))
+
+# Confusion matrix
+cm = confusion_matrix(y_val, y_pred)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm,
+                               display_labels=["Early Stage", "Late Stage"])
+disp.plot(cmap="Blues")
+plt.title("Confusion Matrix - Logistic Regression (Validation Set)")
+plt.show()
