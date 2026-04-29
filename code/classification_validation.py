@@ -26,61 +26,76 @@ data = data.dropna(subset=["stage_binary"]) #remove samples with missing tumor s
 meta_cols = ["ajcc_tumor_pathologic_pt", "cancer_type", "stage_binary"] 
 gene_cols = [col for col in data.columns if col not in meta_cols]
 
-X = data[gene_cols].values #feature matrix
 y = data["stage_binary"].values #target labels (0 = early, 1=late)
 
-# %%
-#Convert binary labels to stage names
-y_label = [{0: "Early Stage (I/II)", 1: "Late Stage (III/IV)"}[i] for i in y]
-feature_1 = "BRCA1"
-feature_2 = "ESR1"
+# %% Set best features and plot
+feature_1 = "FZD3"
+feature_2 = "CACNA1D"
 X = data[[feature_1, feature_2]].values
-sns.scatterplot(x=X[:, 0],
-                y=X[:, 1],
-                hue=y_label,
-                palette="Set1")
+
+y_label = [{0: "Early Stage (I/II)", 1: "Late Stage (III/IV)"}[i] for i in y]
+sns.scatterplot(x=X[:, 0], y=X[:, 1], hue=y_label, palette="Set1")
+plt.xlabel(feature_1)
+plt.ylabel(feature_2)
+plt.title("Training Data")
+plt.show()
+
+
 
 
 # %%
 # Logistic regression
 
 # BUILD A MODEL: 
-model = LogisticRegression(penalty=None, class_weight='balanced').fit(X, y)
+#model = LogisticRegression(penalty=None, class_weight='balanced').fit(X, y)
 
 # PREDICT AND EVALUATE: 
-model.predict_proba(X)
-print(model.score(X, y))
+#model.predict_proba(X)
+#print(model.score(X, y))
 
 # %% Plotting decision boundary
 
 # Create meshgrid
-x_min, x_max = X[:, 0].min(), X[:, 0].max()
-y_min, y_max = X[:, 1].min(), X[:, 1].max()
-xx, yy = np.meshgrid(np.linspace(x_min, x_max, 300),
-                     np.linspace(y_min, y_max, 300))
+#x_min, x_max = X[:, 0].min(), X[:, 0].max()
+#y_min, y_max = X[:, 1].min(), X[:, 1].max()
+#xx, yy = np.meshgrid(np.linspace(x_min, x_max, 300),
+                     #np.linspace(y_min, y_max, 300))
 
 # Compute decision function over the grid
-Z = model.decision_function(np.c_[xx.ravel(), yy.ravel()])
-Z = Z.reshape(xx.shape)
+#Z = model.decision_function(np.c_[xx.ravel(), yy.ravel()])
+#Z = Z.reshape(xx.shape)
 
 # Plot
-plt.contourf(xx, yy, Z, levels=50, cmap="RdBu", alpha=0.6)  # background
-plt.contour(xx, yy, Z, levels=[0], colors='black',
-            linewidths=2)  # decision boundary
-sns.scatterplot(x=X[:, 0],
-                y=X[:, 1],
-                hue=y_label,
-                edgecolors='k',
-                palette="Set1",
-                alpha=0.8,
-                legend=False)
-plt.legend()
-plt.xlabel(feature_1)
-plt.ylabel(feature_2)
-plt.title("Logistic Regression Decision Boundary")
+#plt.contourf(xx, yy, Z, levels=50, cmap="RdBu", alpha=0.6)  # background
+#plt.contour(xx, yy, Z, levels=[0], colors='black',
+            #linewidths=2)  # decision boundary
+#sns.scatterplot(x=X[:, 0],
+                #y=X[:, 1],
+                #hue=y_label,
+                #edgecolors='k',
+                #palette="Set1",
+                #alpha=0.8,
+                #legend=False)
+#plt.legend()
+#plt.xlabel(feature_1)
+#plt.ylabel(feature_2)
+#plt.title("Logistic Regression Decision Boundary")
 
+#plt.show()
+
+# %% DECISION TREE - train on training data
+# Train on first dataset
+X_tr = data[[feature_1, feature_2]].values
+y_tr = data["stage_binary"].values
+
+dt_model = DecisionTreeClassifier(max_depth=2).fit(X_tr, y_tr)
+print("Training accuracy:", dt_model.score(X_tr, y_tr))
+
+# %% PLOT DECISION TREE
+plt.figure()
+plot_tree(dt_model, feature_names=[feature_1, feature_2],
+          class_names=["Early Stage", "Late Stage"], filled=True)
 plt.show()
-
 
 # %%
 #Validation dataset
@@ -122,8 +137,6 @@ BRCA_metadata = metadata_df.loc[cancer_samples]
 BRCA_merged_val = BRCA_gene_data_filtered.T.merge(
     BRCA_metadata, left_index=True, right_index=True)
 
-print("Merged shape:", BRCA_merged_val.shape)
-print("Columns:", BRCA_merged_val.columns.tolist())
 # %%
 # Prepare features and target
 ####################################################
@@ -140,17 +153,8 @@ BRCA_merged_val = BRCA_merged_val.dropna(subset=["stage_binary"])
 X_val = BRCA_merged_val[[feature_1, feature_2]].values
 y_val = BRCA_merged_val["stage_binary"].values
 
-# Predict and evaluate
-####################################################
-y_pred = model.predict(X_val)
-
-print("Validation accuracy:", model.score(X_val, y_val))
+y_pred = dt_model.predict(X_val)
+print("Validation accuracy:", dt_model.score(X_val, y_val))
 print(classification_report(y_val, y_pred, target_names=["Early Stage", "Late Stage"]))
+#%%
 
-# Confusion matrix
-cm = confusion_matrix(y_val, y_pred)
-disp = ConfusionMatrixDisplay(confusion_matrix=cm,
-                               display_labels=["Early Stage", "Late Stage"])
-disp.plot(cmap="Blues")
-plt.title("Confusion Matrix - Logistic Regression (Validation Set)")
-plt.show()
