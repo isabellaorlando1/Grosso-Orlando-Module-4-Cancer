@@ -1,5 +1,6 @@
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,53 +19,13 @@ stage_map = {
 data["stage_binary"] = data["ajcc_tumor_pathologic_pt"].map(stage_map)
 data = data.dropna(subset=["stage_binary"])
 
-meta_cols = ["ajcc_tumor_pathologic_pt", "cancer_type", "stage_binary"]
-gene_cols = [col for col in data.columns if col not in meta_cols]
+meta_cols = ["ajcc_tumor_pathologic_pt", "cancer_type", "stage_binary",
+             "DSS.time", "OS.time", "PFI.time", "DFI.time", "DFI", "PFI", "OS", "DSS",
+             "age_at_diagnosis"]
+gene_cols = [col for col in data.columns
+             if col not in meta_cols and pd.api.types.is_numeric_dtype(data[col])]
+
 y = data["stage_binary"].values
-
-# %% Set best features
-feature_1 = "FZD3"
-feature_2 = "CACNA1D"
-X_tr = data[[feature_1, feature_2]].values
-y_tr = data["stage_binary"].values
-
-y_label = [{0: "Early Stage (I/II)", 1: "Late Stage (III/IV)"}[i] for i in y_tr]
-
-# %% Scatter plot
-sns.scatterplot(x=X_tr[:, 0], y=X_tr[:, 1], hue=y_label, palette="Set1")
-plt.xlabel(feature_1)
-plt.ylabel(feature_2)
-plt.title("Training Data")
-plt.show()
-
-# %% DECISION TREE
-dt_model = DecisionTreeClassifier(max_depth=2).fit(X_tr, y_tr)
-print("Decision Tree Training accuracy:", dt_model.score(X_tr, y_tr))
-
-plt.figure()
-plot_tree(dt_model, feature_names=[feature_1, feature_2],
-          class_names=["Early Stage", "Late Stage"], filled=True)
-plt.show()
-
-# %% LOGISTIC REGRESSION
-model = LogisticRegression(penalty=None, max_iter=1000).fit(X_tr, y_tr)
-print("Logistic Regression Training accuracy:", model.score(X_tr, y_tr))
-
-# Decision boundary plot
-x_min, x_max = X_tr[:, 0].min(), X_tr[:, 0].max()
-y_min, y_max = X_tr[:, 1].min(), X_tr[:, 1].max()
-xx, yy = np.meshgrid(np.linspace(x_min, x_max, 300),
-                     np.linspace(y_min, y_max, 300))
-Z = model.decision_function(np.c_[xx.ravel(), yy.ravel()]).reshape(xx.shape)
-
-plt.contourf(xx, yy, Z, levels=50, cmap="RdBu", alpha=0.6)
-plt.contour(xx, yy, Z, levels=[0], colors='black', linewidths=2)
-sns.scatterplot(x=X_tr[:, 0], y=X_tr[:, 1], hue=y_label,
-                edgecolors='k', palette="Set1", alpha=0.8)
-plt.xlabel(feature_1)
-plt.ylabel(feature_2)
-plt.title("Logistic Regression Decision Boundary")
-plt.show()
 
 # %% Load validation dataset
 BRCA_gene_data = pd.read_csv(
@@ -86,25 +47,109 @@ BRCA_gene_data_filtered = BRCA_data.loc[gene_list]
 
 BRCA_metadata = metadata_df.loc[cancer_samples]
 BRCA_merged_val = BRCA_gene_data_filtered.T.merge(BRCA_metadata, left_index=True, right_index=True)
-
 BRCA_merged_val["stage_binary"] = BRCA_merged_val["ajcc_tumor_pathologic_pt"].map(stage_map)
 BRCA_merged_val = BRCA_merged_val.dropna(subset=["stage_binary"])
 
-X_val = BRCA_merged_val[[feature_1, feature_2]].values
+# %% FIX 1: Find features shared between BOTH datasets before selecting top genes
+# This is why you only had 3 genes before — now you'll have many more
+shared_genes = [g for g in gene_cols if g in BRCA_merged_val.columns]
+print(f"Shared genes available: {len(shared_genes)}")
+
+early = data[data["stage_binary"] == 0][shared_genes]
+late  = data[data["stage_binary"] == 1][shared_genes]
+diff  = (late.mean() - early.mean()).abs().sort_values(ascending=False)
+
+# Use top 20 shared genes instead of top 2
+top_features = diff.index[:20].tolist()
+
+print(f"Top features selected: {top_features}")
+
+# %% Prepare train/val arrays
+X_tr = data[top_features].fillna(0).values
+y_tr = data["stage_binary"].values
+
+X_val = BRCA_merged_val[top_features].fillna(0).values
 y_val = BRCA_merged_val["stage_binary"].values
 
-# %% Compare both models on validation set
-print("\n--- RESULTS ---")
-print(f"Decision Tree       — Train: {dt_model.score(X_tr, y_tr):.3f}  Val: {dt_model.score(X_val, y_val):.3f}")
-print(f"Logistic Regression — Train: {model.score(X_tr, y_tr):.3f}  Val: {model.score(X_val, y_val):.3f}")
 
-# %% Confusion matrices for both
-for name, m in [("Decision Tree", dt_model), ("Logistic Regression", model)]:
-    y_pred = m.predict(X_val)
-    print(f"\n{name}:")
-    print(classification_report(y_val, y_pred, target_names=["Early Stage", "Late Stage"]))
-    cm = confusion_matrix(y_val, y_pred)
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["Early Stage", "Late Stage"])
-    disp.plot(cmap="Blues")
-    plt.title(f"Confusion Matrix - {name} (Validation Set)")
-    plt.show()
+
+# %% FIX 2: Scale features — critical for Logistic Regression
+scaler = StandardScaler()
+X_tr_scaled  = scaler.fit_transform(X_tr)   # fit on train only
+X_val_scaled = scaler.transform(X_val)       # apply same scale to val
+
+# %% DECISION TREE
+# FIX 3: Lower max_depth to reduce overfitting (was 5, now 3)
+dt_model = DecisionTreeClassifier(max_depth=3, class_weight='balanced',
+                                   random_state=0).fit(X_tr, y_tr)
+
+plt.figure(figsize=(20, 8))
+plot_tree(dt_model, feature_names=top_features,
+          class_names=["Early Stage", "Late Stage"], filled=True, fontsize=8)
+plt.title("Decision Tree (max_depth=3)")
+plt.tight_layout()
+plt.show()
+
+# %% LOGISTIC REGRESSION
+# FIX 4: Add L2 regularization (C=0.1) + use scaled data
+# %% LOGISTIC REGRESSION
+# Use only 2 features for decision boundary plot
+plot_features = top_features[:2]
+X_tr_2d = data[plot_features].fillna(0).values
+X_val_2d = BRCA_merged_val[plot_features].fillna(0).values  # add this line
+
+model = LogisticRegression(penalty=None, max_iter=1000, class_weight='balanced').fit(X_tr_2d, y_tr)
+print(f"Logistic Regression Training accuracy: {model.score(X_tr_2d, y_tr):.3f}")
+print(f"Logistic Regression Validation accuracy: {model.score(X_val_2d, y_val):.3f}")
+
+# Decision boundary plot
+x_min, x_max = X_tr_2d[:, 0].min(), X_tr_2d[:, 0].max()
+y_min, y_max = X_tr_2d[:, 1].min(), X_tr_2d[:, 1].max()
+xx, yy = np.meshgrid(np.linspace(x_min, x_max, 300),
+                     np.linspace(y_min, y_max, 300))
+Z = model.decision_function(np.c_[xx.ravel(), yy.ravel()]).reshape(xx.shape)
+
+y_label = ["Late Stage" if val == 1 else "Early Stage" for val in y_tr]
+
+plt.figure(figsize=(8, 6))
+plt.contourf(xx, yy, Z, levels=50, cmap="RdBu", alpha=0.6)
+plt.contour(xx, yy, Z, levels=[0], colors='black', linewidths=2)
+sns.scatterplot(x=X_tr_2d[:, 0], y=X_tr_2d[:, 1], hue=y_label,
+                edgecolors='k', palette="Set1", alpha=0.8)
+plt.xlabel(plot_features[0])
+plt.ylabel(plot_features[1])
+plt.title("Logistic Regression Decision Boundary")
+plt.tight_layout()
+plt.show()
+print(f"Decision Tree Training accuracy: {dt_model.score(X_tr, y_tr):.3f}")
+print(f"Decision Tree Validation accuracy: {dt_model.score(X_val, y_val):.3f}")
+# %% Results
+
+# Logistic Regression results
+y_pred_lr = model.predict(X_val_2d)
+print("Logistic Regression:")
+print(classification_report(y_val, y_pred_lr, target_names=["Early Stage", "Late Stage"]))
+cm = confusion_matrix(y_val, y_pred_lr)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["Early Stage", "Late Stage"])
+disp.plot(cmap="Blues")
+plt.title("Confusion Matrix — Logistic Regression (Validation Set)")
+plt.tight_layout()
+plt.show()
+
+# Decision Tree results
+y_pred_dt = dt_model.predict(X_val)
+print("Decision Tree:")
+print(classification_report(y_val, y_pred_dt, target_names=["Early Stage", "Late Stage"]))
+cm = confusion_matrix(y_val, y_pred_dt)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["Early Stage", "Late Stage"])
+disp.plot(cmap="Blues")
+plt.title("Confusion Matrix — Decision Tree (Validation Set)")
+plt.tight_layout()
+plt.show()
+
+print(f"Logistic Regression Training accuracy: {model.score(X_tr_2d, y_tr):.3f}")
+print(f"Logistic Regression Validation accuracy: {model.score(X_val_2d, y_val):.3f}")
+
+
+print(f"Decision Tree Training accuracy: {dt_model.score(X_tr, y_tr):.3f}")
+print(f"Decision Tree Validation accuracy: {dt_model.score(X_val, y_val):.3f}")
